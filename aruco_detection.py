@@ -1,48 +1,18 @@
-# import cv2
-
-
-# cam = cv2.VideoCapture(0)
-
-
-# aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
-# parameters = cv2.aruco.DetectorParameters()
-# detector = cv2.aruco.ArucoDetector(aruco_dict, parameters)
-
-# try:
-
-#     while True:
-#         ret, frame = cam.read()
-#         if not ret: 
-#             break
-
-#         corners, ids, _ = detector.detectMarkers(frame)
-#         if ids is not None:
-#             filename = "capture.jpg"
-#             cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-#             cv2.imwrite(filename, frame)
-#             print("Image Saved")
-#             print(f"Found IDs: {ids.flatten()}")
-
-#         if cv2.waitKey(1) & 0xFF == ord('q'):
-#             break
-# finally:
-#     cam.release()
-#     cv2.destroyAllWindows()
-
-
-
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Point
+from std_msgs.msg import Float32MultiArray
 import cv2
 import time
+import numpy as np
 
 class ArucoSimplePub(Node):
     def __init__(self):
         super().__init__('aruco_simple_pub')
-        self.publisher_ = self.create_publisher(Point, 'target_pixels', 10)
+        self.publisher_ = self.create_publisher(Float32MultiArray, 'target_pixels', 10)
 
         self.cap = cv2.VideoCapture(0)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         self.dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_50)
         self.parameters = cv2.aruco.DetectorParameters()
@@ -53,19 +23,21 @@ class ArucoSimplePub(Node):
         ret, frame = self.cap.read()
         if not ret: return
 
-        corners, ids, _ = self.detector.detectMarkers(frame)
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        corners, ids, _ = self.detector.detectMarkers(gray)
         
         if ids is not None:
             for i in range(len(ids)):
-                c = corners[i][0]
-                center_x = (c[0][0] + c[2][0]) / 2
-                center_y = (c[0][1] + c[2][1]) / 2
-                
-                msg = Point()
-                msg.x = float(center_x)
-                msg.y = float(center_y)
-                msg.z = float(ids[i][0])
-                self.publisher_.publish(msg)
+                pixel_data = corners[i][0].flatten().tolist() 
+                pixel_data.append(float(ids[i][0]))
+                self.publish_message(pixel_data)
+
+
+    def publish_message(self, data_list):
+        msg = Float32MultiArray()
+        msg.data = data_list
+        self.publisher_.publish(msg)
+    
 
 def main(args=None):
     rclpy.init(args=args)
