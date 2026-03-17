@@ -98,7 +98,6 @@ class TurtlebotMover(Node):
             
         self.stop_robot()
 
-
     def waddle_fire(self, cycles=3):
         """
         Modified 4-phase waddle logic for the ping pong mission.
@@ -260,7 +259,6 @@ def main(args=None):
 
         mover.right_turn()
         time.sleep(0.1)
-
 
         mover.stop_robot()
         
