@@ -12,10 +12,10 @@ class ArucoSub_Pub(Node):
             Float32MultiArray, 'target_pixels', self.listener_callback, 10)
         self.publisher_ = self.create_publisher(Pose, 'target_3d', 10)
         
-        # Calibration data(need to change)(Assume 640x480 dimensions)
+        # Calibration data(need to change)(Assume 320x240 dimensions)
         self.mtx = np.array([
-            [565.0, 0.0, 320.0],
-            [0.0, 565.0, 240.0],
+            [282.5, 0.0, 160.0],
+            [0.0, 282.5, 120.0],
             [0.0, 0.0, 1.0]], dtype=np.float32)
         
         # Constant(need to change)
@@ -43,6 +43,7 @@ class ArucoSub_Pub(Node):
         
         if success:
             self.publish_pose(tvec, rvec)
+            print("Marker found!!")
 
     
     def publish_pose(self, tvec, rvec):
