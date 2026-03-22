@@ -23,8 +23,7 @@ class ArucoSimplePub(Node):
         ret, frame = self.cap.read()
         if not ret: return
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        corners, ids, _ = self.detector.detectMarkers(gray)
+        corners, ids, _ = self.detector.detectMarkers(frame)
         
         if ids is not None:
             for i in range(len(ids)):
