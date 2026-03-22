@@ -38,15 +38,15 @@ class ArucoSub_Pub(Node):
         corners = np.array(data[:8]).reshape((4, 1, 2)).astype(np.float32)
         marker_id = int(data[8])
 
+
         success, rvec, tvec = cv2.solvePnP(
             self.obj_points, corners, self.mtx, self.dist, flags=cv2.SOLVEPNP_IPPE_SQUARE)
         
         if success:
-            self.publish_pose(tvec, rvec)
-            print("Marker found!!")
-
+            self.publish_pose(tvec, rvec,marker_id)
+            print(f"Marker id = {marker_id}")
     
-    def publish_pose(self, tvec, rvec):
+    def publish_pose(self, tvec, rvec,id):
         pose_msg = Pose()
 
         pose_msg.position.x = float(tvec[0][0])
@@ -56,7 +56,7 @@ class ArucoSub_Pub(Node):
         pose_msg.orientation.x = float(rvec[0][0])
         pose_msg.orientation.y = float(rvec[1][0])
         pose_msg.orientation.z = float(rvec[2][0])
-        pose_msg.orientation.w = 1.0
+        pose_msg.orientation.w = float(id)
 
         self.publisher_.publish(pose_msg)
 
