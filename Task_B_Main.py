@@ -4,10 +4,10 @@ from geometry_msgs.msg import Twist, Pose
 from nav_msgs.msg import Odometry
 import math
 
-class Task_A_Controller(Node):
+class Task_B_Controller(Node):
     def __init__(self):
-        super().__init__('Task_A_Controller')
-        self.create_subscription(Pose, 'target_3d', self.task_a, 10)
+        super().__init__('Task_B_Controller')
+        self.create_subscription(Pose, 'target_3d', self.marker_callback, 10)
         self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         self.cmd_pub = self.create_publisher(Twist, 'cmd_vel', 10)
 
@@ -36,6 +36,13 @@ class Task_A_Controller(Node):
         self.rotation_phase = 0
         self.turn_90_direction = 1
 
+        self.last_marker_x = None
+        self.last_marker_time = None
+        self.zero_crossings = []
+        self.period_samples = []
+        self.period = None
+        self.shots_fired = 0
+
     def drive_callback(self):
         if self.state == 'rotating':
             yaw_traveled = self._angle_diff(self.current_yaw, self.start_yaw)
@@ -55,9 +62,9 @@ class Task_A_Controller(Node):
                     self.start_y = self.current_y
                 
                 elif self.rotation_phase == 2:
-                    self.get_logger().info("Ready to Fire")
+                    self.get_logger().info("Tracking target")
+                    self.state = 'tracking'
                     self.rotation_phase = 0
-                    self.stop_robot()
                 
             else:
                 cmd = Twist()
@@ -81,6 +88,10 @@ class Task_A_Controller(Node):
                 cmd.linear.x = self.lin_speed
                 self.cmd_pub.publish(cmd)
 
+        elif self.state == 'tracking':
+            stop_cmd = Twist()
+            self.cmd_pub.publish(stop_cmd)
+
 
     def odom_callback(self, msg):
         self.current_x = msg.pose.pose.position.x
@@ -92,12 +103,15 @@ class Task_A_Controller(Node):
         cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
         self.current_yaw = math.atan2(siny_cosp, cosy_cosp)
 
-    def task_a(self, msg):
+    def marker_callback(self, msg):
         marker_id = int(msg.orientation.w)
+
+
+        if marker_id == 0 and self.state == 'tracking':
+            self.task_b(msg)
+            return
+
         rvec_yaw = msg.orientation.y
-        marker_x = msg.position.x
-        marker_z = msg.position.z
-        err_x = marker_x - self.target_x
         
         if marker_id != 1:
             return
@@ -105,6 +119,8 @@ class Task_A_Controller(Node):
         if self.state != 'idle':
             return
         
+        marker_x = msg.position.x
+        marker_z = msg.position.z
         #Ensure that we are not too far away
         if marker_z > 0.5: 
             return
@@ -112,7 +128,8 @@ class Task_A_Controller(Node):
         if abs(marker_x) > 0.3:
             return
         
-       
+        
+        err_x = marker_x - self.target_x
 
         if abs(err_x) > self.x_threshold:
             self.angle_to_turn = math.atan2(err_x, marker_z)
@@ -128,6 +145,40 @@ class Task_A_Controller(Node):
             self.state = 'driving'
             self.get_logger().info(f"Already aligned. Driving {self.distance_to_travel:.3f}m")
 
+    def task_b(self,msg):
+        marker_x = msg.position.x
+        now = self.get_clock().now().nanoseconds / 1e9
+
+        if self.last_marker_x is not None:
+
+            #Detect a zero crossing
+            if (self.last_marker_x * marker_x < 0): 
+                if not self.zero_crossings or (now - self.zero_crossings[-1] > 0.1):
+                    self.zero_crossings.append(now)
+                
+
+            if len(self.zero_crossings) >= 3:
+                self.period = self.zero_crossings[-1] - self.zero_crossings[-3]
+                current_cycle_period = self.zero_crossings[-1] - self.zero_crossings[-3]
+                self.period_samples.append(current_cycle_period)
+            
+            if len(self.period_samples) == 3:
+                self.period = sum(self.period_samples) / len(self.period_samples)
+            
+            if (self.last_marker_x * marker_x < 0):
+                if self.period is not None and self.period > 0 and self.shots_fired < 3:
+                    self.get_logger().info(f"!!! SHOOTING !!! (Target at Zero, Shot {self.shots_fired + 1})")
+                    self.shots_fired += 1
+            
+                elif (self.shots_fired == 3):
+                    self.stop_robot()
+                
+
+        self.last_marker_x = marker_x
+        self.last_marker_time = now
+
+
+    
     def _angle_diff(self,current,start):
         # Handles wrapping of angles
         diff = current - start
@@ -146,7 +197,7 @@ class Task_A_Controller(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = Task_A_Controller()
+    node = Task_B_Controller()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
